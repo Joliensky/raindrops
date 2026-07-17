@@ -10,6 +10,20 @@ use crossterm::{
     ExecutableCommand,
 };
 use rand;
+use clap::Parser; 
+
+#[derive(Parser, Debug)]
+#[command(author, version, about = "raindrops for the terminal", long_about = None)]
+struct Args {
+    #[arg(short = 'c', long, default_value = "blue")]
+    color: String,
+
+    #[arg(short = 's', long, default_value_t = 16.0)]
+    size: f32,
+
+    #[arg(short = 'f', long, default_value_t = 0.1)]
+    frequency: f32,
+}
 
 struct Source {
     x_0: f32,
@@ -17,7 +31,7 @@ struct Source {
     t_start: Instant,
 }
 
-fn calculate_wave_intensity(x: u16, y: u16, source: &Source) -> f32 {
+fn calculate_wave_intensity(x: u16, y: u16, source: &Source, max_radius: f32) -> f32 {
     let t = source.t_start.elapsed().as_secs_f32();
     
     let dx = (x as f32 - source.x_0) * 0.5; 
@@ -27,7 +41,6 @@ fn calculate_wave_intensity(x: u16, y: u16, source: &Source) -> f32 {
     let v = 15.0;      
     let k = 2.0;       
     let gamma = 1.67;   
-    let max_radius = 16.0; 
 
     if d > max_radius || d > v * t {
         return 0.0;
@@ -41,7 +54,18 @@ fn calculate_wave_intensity(x: u16, y: u16, source: &Source) -> f32 {
 }
 
 fn main() -> Result<()> {
-    
+    let args = Args::parse();
+
+    let theme_color = match args.color.to_lowercase().as_str() {
+        "green" => Color::Green,
+        "cyan" => Color::Cyan,
+        "red" => Color::Red,
+        "yellow" => Color::Yellow,
+        "white" => Color::White,
+        _ => Color::Blue, 
+    };
+
+
     let running = Arc::new(AtomicBool::new(true));
     let r = running.clone();
 
@@ -53,7 +77,7 @@ fn main() -> Result<()> {
     let mut stdout = stdout();
     stdout.execute(EnterAlternateScreen)?; 
     stdout.execute(cursor::Hide)?;          
-    stdout.execute(SetForegroundColor(Color::Blue))?; 
+    stdout.execute(SetForegroundColor(theme_color))?; 
 
     let mut sources: Vec<Source> = Vec::new();
     let chars = [' ', '.', ':', '-', '=', '+', '*', '#', '%', '@'];
@@ -63,7 +87,7 @@ fn main() -> Result<()> {
     while running.load(Ordering::SeqCst) {
         let (cols, rows) = terminal::size()?;
 
-        if rand::random::<f32>() < 0.1 {
+        if rand::random::<f32>() < args.frequency {
             sources.push(Source {
                 x_0: (rand::random::<f32>() * cols as f32),
                 y_0: (rand::random::<f32>() * rows as f32),
@@ -81,7 +105,8 @@ fn main() -> Result<()> {
             for x in 0..cols {
                 let mut total_intensity: f32 = 0.0;
                 for source in &sources {
-                    total_intensity += calculate_wave_intensity(x, y, &source);
+                    // Dynamische Größe!
+                    total_intensity += calculate_wave_intensity(x, y, &source, args.size);
                 }
 
                 total_intensity *= 5.0; 
